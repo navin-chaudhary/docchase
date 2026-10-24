@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
@@ -12,9 +13,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default function LoginPage() {
-  const router = useRouter();
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const rawCallbackUrl = searchParams.get("callbackUrl");
+  const callbackUrl =
+    rawCallbackUrl &&
+    rawCallbackUrl.startsWith("/") &&
+    !rawCallbackUrl.startsWith("//")
+      ? rawCallbackUrl
+      : "/dashboard";
+
   const {
     register,
     handleSubmit,
@@ -29,6 +39,7 @@ export default function LoginPage() {
       email: values.email,
       password: values.password,
       redirect: false,
+      redirectTo: callbackUrl,
     });
 
     if (result?.error) {
@@ -37,9 +48,13 @@ export default function LoginPage() {
     }
 
     toast.success("Welcome back");
-    router.push("/dashboard");
-    router.refresh();
+    window.location.href = callbackUrl;
   }
+
+  const registerHref =
+    callbackUrl !== "/dashboard"
+      ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}`
+      : "/register";
 
   return (
     <div className="surface p-6 sm:p-8">
@@ -96,12 +111,30 @@ export default function LoginPage() {
       <p className="mt-7 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
         <Link
-          href="/register"
+          href={registerHref}
           className="font-semibold text-primary transition-colors hover:text-[color-mix(in_oklab,var(--primary),black_12%)]"
         >
           Create one
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="surface space-y-4 p-6 sm:p-8">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

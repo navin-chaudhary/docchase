@@ -16,11 +16,28 @@ const protectedPrefixes = [
 const authPages = ["/login", "/register", "/forgot-password", "/reset-password"];
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const token = await getToken({
+  const { pathname, search } = request.nextUrl;
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+
+  const isSecure =
+    request.url.startsWith("https://") ||
+    request.headers.get("x-forwarded-proto") === "https" ||
+    request.cookies.has("__Secure-authjs.session-token") ||
+    request.cookies.has("__Secure-next-auth.session-token");
+
+  let token = await getToken({
     req: request,
-    secret: process.env.AUTH_SECRET,
+    secret,
+    secureCookie: isSecure,
   });
+
+  if (!token && isSecure) {
+    token = await getToken({
+      req: request,
+      secret,
+      secureCookie: false,
+    });
+  }
 
   const isProtected = protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -31,12 +48,20 @@ export async function proxy(request: NextRequest) {
 
   if (isProtected && !token) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    const callback = `${pathname}${search}`;
+    loginUrl.searchParams.set("callbackUrl", callback);
     return NextResponse.redirect(loginUrl);
   }
 
   if (isAuthPage && token) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const rawCallbackUrl = request.nextUrl.searchParams.get("callbackUrl");
+    const redirectUrl =
+      rawCallbackUrl &&
+      rawCallbackUrl.startsWith("/") &&
+      !rawCallbackUrl.startsWith("//")
+        ? rawCallbackUrl
+        : "/dashboard";
+    return NextResponse.redirect(new URL(redirectUrl, request.url));
   }
 
   return NextResponse.next();

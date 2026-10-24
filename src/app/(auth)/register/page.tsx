@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
@@ -13,9 +14,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default function RegisterPage() {
-  const router = useRouter();
+function RegisterForm() {
+  const searchParams = useSearchParams();
+  const rawCallbackUrl = searchParams.get("callbackUrl");
+  const callbackUrl =
+    rawCallbackUrl &&
+    rawCallbackUrl.startsWith("/") &&
+    !rawCallbackUrl.startsWith("//")
+      ? rawCallbackUrl
+      : "/dashboard";
+
   const {
     register,
     handleSubmit,
@@ -39,17 +49,21 @@ export default function RegisterPage() {
         email: values.email,
         password: values.password,
         redirect: false,
+        redirectTo: callbackUrl,
       });
 
       if (result?.error) {
         toast.success("Account created. Please sign in.");
-        router.push("/login");
+        const loginUrl =
+          callbackUrl !== "/dashboard"
+            ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+            : "/login";
+        window.location.href = loginUrl;
         return;
       }
 
       toast.success("Welcome to DocChase");
-      router.push("/dashboard");
-      router.refresh();
+      window.location.href = callbackUrl;
     } catch (err) {
       const message =
         err instanceof ApiClientError
@@ -58,6 +72,11 @@ export default function RegisterPage() {
       toast.error(message);
     }
   }
+
+  const loginHref =
+    callbackUrl !== "/dashboard"
+      ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+      : "/login";
 
   return (
     <div className="surface p-6 sm:p-8">
@@ -136,12 +155,31 @@ export default function RegisterPage() {
       <p className="mt-7 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link
-          href="/login"
+          href={loginHref}
           className="font-semibold text-primary transition-colors hover:text-[color-mix(in_oklab,var(--primary),black_12%)]"
         >
           Sign in
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="surface space-y-4 p-6 sm:p-8">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }
